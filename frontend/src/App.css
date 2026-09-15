@@ -68,3 +68,36 @@ html, body {
 .dot.red { background: red; }
 .dot.orange { background: orange; }
 .dot.green { background: green; }
+
+.summary-panel {
+  position: absolute;
+  top: 16px;
+  left: 70px;
+  display: flex;
+  gap: 12px;
+  z-index: 1000;
+}
+
+.summary-item {
+  background: white;
+  padding: 10px 18px;
+  border-radius: 8px;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+  text-align: center;
+  border-top: 4px solid;
+}
+
+.summary-item.high { border-color: red; }
+.summary-item.medium { border-color: orange; }
+.summary-item.low { border-color: green; }
+
+.summary-count {
+  display: block;
+  font-size: 22px;
+  font-weight: bold;
+}
+
+.summary-label {
+  font-size: 11px;
+  color: #555;
+}

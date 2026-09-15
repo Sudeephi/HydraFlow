@@ -20,8 +20,33 @@ function getColor(risk) {
 }
 
 function FloodMap() {
+  // Calculate risk counts for the summary panel
+  let highCount = 0, mediumCount = 0, lowCount = 0;
+
+  roadsData.features.forEach((road) => {
+    if (!road.geometry || road.geometry.type !== 'LineString') return;
+    const roadId = String(road.id || road.properties.id || Math.random());
+    const risk = getFakeRisk(roadId);
+    if (risk >= 0.7) highCount++;
+    else if (risk >= 0.4) mediumCount++;
+    else lowCount++;
+  });
     return (
     <div style={{ position: 'relative', flex: 1, display: 'flex' }}>
+        <div className="summary-panel">
+         <div className="summary-item high">
+                <span className="summary-count">{highCount}</span>
+                <span className="summary-label">High Risk</span>
+         </div>
+         <div className="summary-item medium">
+                <span className="summary-count">{mediumCount}</span>
+                <span className="summary-label">Medium Risk</span>
+         </div>
+         <div className="summary-item low">
+                <span className="summary-count">{lowCount}</span>
+                <span className="summary-label">Low Risk</span>
+         </div>
+        </div>
       <MapContainer center={[17.4933, 78.3900]} zoom={13} style={{ flex: 1, width: '100%' }}>
         <TileLayer
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
