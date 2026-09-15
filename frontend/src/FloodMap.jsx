@@ -21,7 +21,7 @@ function getColor(risk) {
 
 function FloodMap() {
   return (
-    <MapContainer center={[17.4933, 78.3900]} zoom={13} style={{ height: '100vh', width: '100%' }}>
+    <MapContainer center={[17.4933, 78.3900]} zoom={13} style={{ flex: 1, width: '100%' }}>
       <TileLayer
         url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         attribution='&copy; OpenStreetMap contributors'
