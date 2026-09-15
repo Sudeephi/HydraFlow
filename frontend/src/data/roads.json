@@ -1,0 +1,65 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": { "road_id": "R1", "name": "Kukatpally Main Road", "risk": 0.82 },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [78.4011, 17.4933],
+          [78.4035, 17.4948],
+          [78.4058, 17.4962]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": { "road_id": "R2", "name": "Hafeezpet Road", "risk": 0.35 },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [78.3612, 17.4785],
+          [78.3634, 17.4801],
+          [78.3660, 17.4818]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": { "road_id": "R3", "name": "Bachupally Road", "risk": 0.61 },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [78.3892, 17.5102],
+          [78.3915, 17.5120],
+          [78.3940, 17.5135]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": { "road_id": "R4", "name": "Miyapur Road", "risk": 0.15 },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [78.3548, 17.4967],
+          [78.3572, 17.4985],
+          [78.3598, 17.5001]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": { "road_id": "R5", "name": "KPHB Colony Road", "risk": 0.93 },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [78.3987, 17.4855],
+          [78.4008, 17.4870],
+          [78.4030, 17.4888]
+        ]
+      }
+    }
+  ]
+}
