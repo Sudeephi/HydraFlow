@@ -1,11 +1,9 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-import random
+import json
 
 app = FastAPI()
 
-# Allow the frontend (localhost:5173) to call this API — browsers block
-# cross-origin requests by default without this.
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -13,36 +11,23 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Base road data — same shape as frontend/src/data/roads.json
-# risk: 0.0-1.0 (this is the CURRENT / hour-0 risk)
-BASE_ROADS = [
-    {"road_id": "R1", "name": "Kukatpally Main Road", "risk": 0.82,
-     "coordinates": [[78.4011, 17.4933], [78.4035, 17.4948], [78.4058, 17.4962]]},
-    {"road_id": "R2", "name": "Hafeezpet Road", "risk": 0.35,
-     "coordinates": [[78.3612, 17.4785], [78.3634, 17.4801], [78.3660, 17.4818]]},
-    {"road_id": "R3", "name": "Bachupally Road", "risk": 0.61,
-     "coordinates": [[78.3892, 17.5102], [78.3915, 17.5120], [78.3940, 17.5135]]},
-    {"road_id": "R4", "name": "Miyapur Road", "risk": 0.15,
-     "coordinates": [[78.3548, 17.4967], [78.3572, 17.4985], [78.3598, 17.5001]]},
-    {"road_id": "R5", "name": "KPHB Colony Road", "risk": 0.93,
-     "coordinates": [[78.3987, 17.4855], [78.4008, 17.4870], [78.4030, 17.4888]]},
-]
+# Load real OSM road data (252 roads, Kukatpally-Hafeezpet)
+with open("roads_data.json", "r", encoding="utf-8") as f:
+    ROADS_GEOJSON = json.load(f)
 
 
-def build_feature(road: dict, risk: float) -> dict:
-    """Wraps one road into a GeoJSON Feature, matching roads.json's exact shape."""
-    return {
-        "type": "Feature",
-        "properties": {
-            "road_id": road["road_id"],
-            "name": road["name"],
-            "risk": round(risk, 2),
-        },
-        "geometry": {
-            "type": "LineString",
-            "coordinates": road["coordinates"],
-        },
-    }
+def get_base_risk(road_id: str) -> float:
+    """Deterministic fake risk from road_id — matches frontend's formula exactly."""
+    hash_val = 0
+    for ch in road_id:
+        hash_val = (hash_val * 31 + ord(ch)) % 100
+    return hash_val / 100
+
+
+def get_risk_at_hour(base_risk: float, hour: int) -> float:
+    """Matches frontend's getRiskAtHour exactly, so numbers stay consistent."""
+    growth_factor = 1 + (hour * 0.15) * base_risk
+    return min(base_risk * growth_factor, 1)
 
 
 @app.get("/")
@@ -52,26 +37,41 @@ def read_root():
 
 @app.get("/roads")
 def get_roads():
-    """Current risk snapshot (hour 0) — same shape as the old mock roads.json."""
-    features = [build_feature(r, r["risk"]) for r in BASE_ROADS]
+    """Current risk snapshot (hour 0)."""
+    features = []
+    for road in ROADS_GEOJSON["features"]:
+        if not road.get("geometry") or road["geometry"]["type"] != "LineString":
+            continue
+        road_id = str(road.get("id", road["properties"].get("id", "")))
+        risk = get_risk_at_hour(get_base_risk(road_id), 0)
+        features.append({
+            "type": "Feature",
+            "properties": {
+                "road_id": road_id,
+                "name": road["properties"].get("name", "Unnamed Road"),
+                "risk": round(risk, 3),
+            },
+            "geometry": road["geometry"],
+        })
     return {"type": "FeatureCollection", "features": features}
 
 
 @app.get("/nowcast")
 def get_nowcast(hour: int = 0):
-    """
-    Returns risk projected 'hour' hours ahead (0-3), matching the frontend's
-    timeline slider (Now, +1h, +2h, +3h).
-    For now: risk drifts randomly up/down each hour as a placeholder for the
-    real XGBoost model, which the ML teammate will plug in later.
-    """
-    hour = max(0, min(hour, 3))  # clamp to 0-3, matches slider range
-    random.seed(hour)  # same hour always gives same result (consistent demo)
-
+    hour = max(0, min(hour, 3))
     features = []
-    for road in BASE_ROADS:
-        drift = random.uniform(-0.15, 0.20) * hour
-        projected_risk = max(0.0, min(1.0, road["risk"] + drift))
-        features.append(build_feature(road, projected_risk))
-
+    for road in ROADS_GEOJSON["features"]:
+        if not road.get("geometry") or road["geometry"]["type"] != "LineString":
+            continue
+        road_id = str(road.get("id", road["properties"].get("id", "")))
+        risk = get_risk_at_hour(get_base_risk(road_id), hour)
+        features.append({
+            "type": "Feature",
+            "properties": {
+                "road_id": road_id,
+                "name": road["properties"].get("name", "Unnamed Road"),
+                "risk": round(risk, 3),
+            },
+            "geometry": road["geometry"],
+        })
     return {"type": "FeatureCollection", "features": features, "hour": hour}
