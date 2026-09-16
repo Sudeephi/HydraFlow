@@ -1,20 +1,8 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { MapContainer, TileLayer, Polyline, Popup } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
-import roadsData from './data/overpass-roads.json';
 
-function getBaseFakeRisk(roadId) {
-  let hash = 0;
-  for (let i = 0; i < roadId.length; i++) {
-    hash = (hash * 31 + roadId.charCodeAt(i)) % 100;
-  }
-  return hash / 100;
-}
-
-function getRiskAtHour(baseRisk, hour) {
-  const growthFactor = 1 + (hour * 0.15) * baseRisk;
-  return Math.min(baseRisk * growthFactor, 1);
-}
+const API_BASE = 'http://127.0.0.1:8000';
 
 function getColor(risk) {
   if (risk >= 0.7) return 'red';
@@ -22,7 +10,6 @@ function getColor(risk) {
   return 'green';
 }
 
-// Fake onset window + confidence, derived consistently from risk
 function getOnsetWindow(risk) {
   if (risk >= 0.7) return '20–45 min';
   if (risk >= 0.4) return '45–90 min';
@@ -34,19 +21,53 @@ function getConfidence(roadId) {
   for (let i = 0; i < roadId.length; i++) {
     hash = (hash * 17 + roadId.charCodeAt(i)) % 100;
   }
-  return 60 + (hash % 35); // fake range 60-94%
+  return 60 + (hash % 35);
 }
 
 function FloodMap() {
   const [hour, setHour] = useState(0);
   const [selectedRoad, setSelectedRoad] = useState(null);
+  const [roadsData, setRoadsData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    setLoading(true);
+    setError(null);
+    fetch(`${API_BASE}/nowcast?hour=${hour}`)
+      .then((res) => {
+        if (!res.ok) throw new Error('Backend request failed');
+        return res.json();
+      })
+      .then((data) => {
+        setRoadsData(data);
+        setLoading(false);
+      })
+      .catch((err) => {
+        console.error(err);
+        setError('Could not connect to backend. Is it running?');
+        setLoading(false);
+      });
+  }, [hour]);
+
+  if (loading && !roadsData) {
+    return <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>Loading roads...</div>;
+  }
+
+  if (error) {
+    return (
+      <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'red', flexDirection: 'column', gap: '8px' }}>
+        <div>{error}</div>
+        <div style={{ fontSize: '13px', color: '#666' }}>
+          Make sure the backend is running: <code>python -m uvicorn main:app --reload</code>
+        </div>
+      </div>
+    );
+  }
 
   let highCount = 0, mediumCount = 0, lowCount = 0;
-
   roadsData.features.forEach((road) => {
-    if (!road.geometry || road.geometry.type !== 'LineString') return;
-    const roadId = String(road.id || road.properties.id || Math.random());
-    const risk = getRiskAtHour(getBaseFakeRisk(roadId), hour);
+    const risk = road.properties.risk;
     if (risk >= 0.7) highCount++;
     else if (risk >= 0.4) mediumCount++;
     else lowCount++;
@@ -78,13 +99,13 @@ function FloodMap() {
           if (!road.geometry || road.geometry.type !== 'LineString') return null;
 
           const coords = road.geometry.coordinates.map(([lng, lat]) => [lat, lng]);
-          const roadId = String(road.id || road.properties.id || Math.random());
-          const risk = getRiskAtHour(getBaseFakeRisk(roadId), hour);
+          const roadId = road.properties.road_id;
+          const risk = road.properties.risk;
           const name = road.properties.name || 'Unnamed Road';
 
           return (
             <Polyline
-              key={roadId}
+              key={`${roadId}-${hour}`}
               positions={coords}
               color={getColor(risk)}
               weight={4}
