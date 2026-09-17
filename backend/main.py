@@ -3,6 +3,8 @@ from fastapi.middleware.cors import CORSMiddleware
 import json
 import rasterio
 import numpy as np
+import xgboost as xgb
+import pandas as pd
 
 app = FastAPI()
 
@@ -16,34 +18,26 @@ app.add_middleware(
 # Load real OSM road data (252 roads, Kukatpally-Hafeezpet)
 with open("roads_data.json", "r", encoding="utf-8") as f:
     ROADS_GEOJSON = json.load(f)
-# Load per-road Curve Number (CN) from land cover analysis
-with open("road_cn_lookup.json", "r", encoding="utf-8") as f:
-    CN_LOOKUP_LIST = json.load(f)
-CN_LOOKUP = {entry["road_id"]: entry["cn"] for entry in CN_LOOKUP_LIST}
 
-# Load real hourly rainfall time-series
-with open("rainfall_series.json", "r", encoding="utf-8") as f:
-    RAINFALL_SERIES = json.load(f)
-RAINFALL_BY_HOUR = {entry["hour"]: entry["rainfall_mm"] for entry in RAINFALL_SERIES}
 # Load DEM (elevation raster)
 dem_dataset = rasterio.open("output_hh.tif")
 dem_band = dem_dataset.read(1)
 dem_min = float(np.nanmin(dem_band))
 dem_max = float(np.nanmax(dem_band))
+
+# Load trained XGBoost flood risk model
+xgb_model = xgb.XGBRegressor()
+xgb_model.load_model("flood_risk_model.json")
+
 # Load per-road Curve Number (CN) from land cover analysis
 with open("road_cn_lookup.json", "r", encoding="utf-8") as f:
     CN_LOOKUP_LIST = json.load(f)
 ROAD_CN_LOOKUP = {entry["road_id"]: entry["cn"] for entry in CN_LOOKUP_LIST}
 
-# Real historical rainfall time-series (Hyderabad storm event)
-RAINFALL_TIMESERIES = {
-    0: 9.6,
-    1: 28.8,
-    2: 57.6,
-    3: 57.6,
-    4: 28.8,
-    5: 9.6,
-}
+# Load real hourly rainfall time-series (Teammate 3's data)
+with open("rainfall_series.json", "r", encoding="utf-8") as f:
+    RAINFALL_SERIES = json.load(f)
+RAINFALL_TIMESERIES = {entry["hour"]: entry["rainfall_mm"] for entry in RAINFALL_SERIES}
 
 
 def get_cn_for_road(road_id: str) -> float:
@@ -142,9 +136,11 @@ def get_nowcast(hour: int = 0):
         elevation = get_road_elevation(road)
         rainfall_mm = get_rainfall_for_hour(hour)
         cn = get_cn_for_road(road_id)
-        runoff = compute_scs_runoff(rainfall_mm, cn)
-        base_risk = normalize_runoff_to_risk(runoff, rainfall_mm)
-        risk = get_risk_at_hour(base_risk, elevation, hour)
+
+        # Use the trained XGBoost model instead of the raw formula
+        model_input = pd.DataFrame([[elevation, cn, rainfall_mm]], columns=["elevation", "cn", "rainfall_mm"])
+        risk = float(xgb_model.predict(model_input)[0])
+        risk = min(max(risk, 0), 1)  # safety clamp
         features.append({
             "type": "Feature",
             "properties": {
