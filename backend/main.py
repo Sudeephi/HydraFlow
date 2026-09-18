@@ -62,17 +62,26 @@ def get_elevation_at(lon: float, lat: float) -> float:
     return None
 
 
-def get_road_elevation(road: dict) -> float:
-    """Average elevation across a road's coordinate points."""
+def get_road_elevation_and_confidence(road: dict):
+    """Average elevation + confidence based on fraction of valid DEM samples."""
     coords = road["geometry"]["coordinates"]
     elevations = []
     for lon, lat in coords:
         elev = get_elevation_at(lon, lat)
         if elev is not None:
             elevations.append(elev)
+
+    total_points = len(coords)
+    valid_points = len(elevations)
+    valid_ratio = valid_points / total_points if total_points > 0 else 0
+
     if not elevations:
-        return (dem_min + dem_max) / 2  # fallback: mid-range
-    return sum(elevations) / len(elevations)
+        avg_elevation = (dem_min + dem_max) / 2
+    else:
+        avg_elevation = sum(elevations) / len(elevations)
+
+    confidence = round(60 + 35 * valid_ratio)  # 60-95% range, real data-driven
+    return avg_elevation, confidence
 
 
 # Default Curve Number for our mixed-urban pilot area.
@@ -133,7 +142,7 @@ def get_nowcast(hour: int = 0):
         if not road.get("geometry") or road["geometry"]["type"] != "LineString":
             continue
         road_id = str(road.get("id", road["properties"].get("id", "")))
-        elevation = get_road_elevation(road)
+        elevation, confidence = get_road_elevation_and_confidence(road)
         rainfall_mm = get_rainfall_for_hour(hour)
         cn = get_cn_for_road(road_id)
 
@@ -148,6 +157,7 @@ def get_nowcast(hour: int = 0):
                 "name": road["properties"].get("name", "Unnamed Road"),
                 "risk": round(risk, 3),
                 "elevation_m": round(elevation, 1),
+                "confidence": confidence,
             },
             "geometry": road["geometry"],
         })

@@ -177,3 +177,24 @@ html, body {
   cursor: pointer;
   color: #888;
 }
+
+.replay-btn {
+  margin-top: 10px;
+  width: 100%;
+  padding: 8px;
+  background: #0b3d5c;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.replay-btn:hover {
+  background: #0a3450;
+}
+
+.replay-btn:disabled {
+  background: #7a8a99;
+  cursor: not-allowed;
+}

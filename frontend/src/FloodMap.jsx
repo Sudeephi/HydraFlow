@@ -16,13 +16,6 @@ function getOnsetWindow(risk) {
   return '2–3 hrs';
 }
 
-function getConfidence(roadId) {
-  let hash = 0;
-  for (let i = 0; i < roadId.length; i++) {
-    hash = (hash * 17 + roadId.charCodeAt(i)) % 100;
-  }
-  return 60 + (hash % 35);
-}
 
 function FloodMap() {
   const [hour, setHour] = useState(0);
@@ -30,25 +23,63 @@ function FloodMap() {
   const [roadsData, setRoadsData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [isReplaying, setIsReplaying] = useState(false);
 
+  const [preloadedData, setPreloadedData] = useState(null);
+  
   useEffect(() => {
-    setLoading(true);
-    setError(null);
-    fetch(`${API_BASE}/nowcast?hour=${hour}`)
-      .then((res) => {
-        if (!res.ok) throw new Error('Backend request failed');
-        return res.json();
-      })
-      .then((data) => {
+  let isCurrent = true; // guards against stale responses
+
+  setLoading(true);
+  setError(null);
+  fetch(`${API_BASE}/nowcast?hour=${hour}`)
+    .then((res) => {
+      if (!res.ok) throw new Error('Backend request failed');
+      return res.json();
+    })
+    .then((data) => {
+      if (isCurrent) {
         setRoadsData(data);
         setLoading(false);
-      })
-      .catch((err) => {
+      }
+    })
+    .catch((err) => {
+      if (isCurrent) {
         console.error(err);
         setError('Could not connect to backend. Is it running?');
         setLoading(false);
-      });
-  }, [hour]);
+      }
+    });
+
+  return () => {
+    isCurrent = false; // runs when hour changes again before this fetch finishes
+  };
+}, [hour]);
+
+ useEffect(() => {
+  if (!isReplaying || !preloadedData) return;
+
+  const interval = setInterval(() => {
+    setHour((prevHour) => {
+      const nextHour = prevHour + 1;
+      if (nextHour > 3) {
+        setIsReplaying(false);
+        setPreloadedData(null);
+        return prevHour;
+      }
+      setRoadsData(preloadedData[nextHour]); // instant swap, no fetch delay
+      return nextHour;
+    });
+  }, 1500);
+
+  return () => clearInterval(interval);
+}, [isReplaying, preloadedData]);
+
+ useEffect(() => {
+  if (preloadedData) {
+    setRoadsData(preloadedData[0]);
+  }
+}, [preloadedData]);
 
   if (loading && !roadsData) {
     return <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>Loading roads...</div>;
@@ -110,7 +141,7 @@ function FloodMap() {
               color={getColor(risk)}
               weight={4}
               eventHandlers={{
-                click: () => setSelectedRoad({ roadId, name, risk }),
+                click: () => setSelectedRoad({ roadId, name, risk, confidence: road.properties.confidence }),
               }}
             >
               <Popup>
@@ -148,6 +179,29 @@ function FloodMap() {
           <span>+2h</span>
           <span>+3h</span>
         </div>
+        <button
+          className="replay-btn"
+          onClick={async () => {
+            setIsReplaying(true);
+            setHour(0);
+
+            // Pre-fetch all 4 hours before starting the animation
+          try {
+            const results = await Promise.all(
+              [0, 1, 2, 3].map((h) =>
+                fetch(`${API_BASE}/nowcast?hour=${h}`).then((res) => res.json())
+              )
+            );
+            setPreloadedData(results);
+          } catch (err) {
+            console.error('Preload failed', err);
+            setIsReplaying(false);
+          }
+        }}
+          disabled={isReplaying}
+        >
+          {isReplaying ? 'Replaying Storm...' : '▶ Replay Historical Storm'}
+        </button>
       </div>
 
       {selectedRoad && (
@@ -163,7 +217,7 @@ function FloodMap() {
           </div>
           <div className="detail-row">
             <span>Confidence</span>
-            <b>{getConfidence(selectedRoad.roadId)}%</b>
+            <b>{selectedRoad.confidence}%</b>
           </div>
           <div className="detail-row">
             <span>Risk Level</span>
